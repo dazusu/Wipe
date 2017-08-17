@@ -48,5 +48,15 @@
   <ItemGroup>
     <None Include="App.config" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Wipe.Packets\Wipe.Packets.csproj">
+      <Project>{2de7c656-2130-4089-9728-8a52152b1521}</Project>
+      <Name>Wipe.Packets</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Wipe.Server\Wipe.MMO.csproj">
+      <Project>{1532984a-f411-45bf-a3d8-a4ad1ec48add}</Project>
+      <Name>Wipe.MMO</Name>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
