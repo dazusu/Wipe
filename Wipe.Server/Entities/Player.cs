@@ -7,16 +7,35 @@ using SocketMessaging;
 using System.IO;
 using ProtoBuf;
 using Wipe.Packets;
+using Wipe.MMO.Utilities;
+using Wipe.MMO.Zones;
 
 namespace Wipe.MMO.Entities
 {
-    class Player : IEntity
+    public partial class Player : IEntity
     {
         #region Fields
-        private Connection _connection;
-        private byte[] _receiveBuffer;
-        private MemoryStream _buffer;
-        private long _continue;
+        private bool _authenticated = false;
+        private Fiber _fiber = new Fiber();
+        private int _entityId;
+        private EntityLocation _location;
+        private Zone _currentZone;
+
+        private EntityUpdate _entityUpdate = new EntityUpdate();
+        private ZoneUpdate _zoneUpdate = new ZoneUpdate();
+        #endregion
+
+        #region Player Stats
+        private int _velocity = 500;
+        private string _name = "";
+        #endregion
+
+        #region properties
+        public int EntityId => _entityId;
+        public bool IsConnected => _connection.IsConnected;
+        public EntityLocation Location => _location;
+        public Zone CurrentZone => _currentZone;
+
         #endregion
 
 
@@ -26,54 +45,79 @@ namespace Wipe.MMO.Entities
         /// <param name="connection"></param>
         public Player(Connection connection)
         {
-            _receiveBuffer = new byte[] { };
+            _authenticated = true;
+            _name = "Dazusu";
+            _location = new EntityLocation()
+            {
+                X = 10,
+                Y = 11,
+                Heading = 9,
+                Zone = Area.UngurForest
+            };
+
+            _currentZone = new Zone();
+
             _buffer = new MemoryStream();
-
+            // Assign the player's connection reference.
             _connection = connection;
-
+            // Set the connection mode to raw.
             _connection.SetMode(MessageMode.Raw);
-
+            // Hook the ReceivedRaw event.
             _connection.ReceivedRaw += _connection_ReceivedRaw;
+
+            _fiber.Enqueue(Update);
+        }
+
+        private void Update()
+        {
+            if (_authenticated)
+            {
+                _entityUpdate = new EntityUpdate()
+                {
+                    EntityId = _entityId,
+                    Type = EntityType.PlayerCharacter,
+                    Status = EntityStatus.Active,
+                    X = _location.X,
+                    Y = _location.Y,
+                    Heading = _location.Heading,
+                    Velocity = _velocity
+                };
+
+                if (CurrentZone != null)
+                {
+                    SendZoneUpdate();
+                }
+            }
+
+            _fiber.Schedule(Update, TimeSpan.FromMilliseconds(Config.UPDATE_PLAYER_ENTITY_MS));
+        }
+
+        public void SendZoneUpdate()
+        {
+
+            _zoneUpdate.ServerTime = Environment.TickCount;
+
+            List<EntityUpdate> updates = new List<EntityUpdate>();
+
+            updates.Add(_entityUpdate);
+
+            _zoneUpdate.EntityUpdates = updates;
+
+            Send(_zoneUpdate);
         }
 
 
-        /// <summary>
-        /// Handles recieving a packet from the player.
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        private void _connection_ReceivedRaw(object sender, EventArgs e)
+
+
+        public void Dispose()
         {
-            byte[] received = _connection.Receive();
-
-            _buffer.Write(received, 0, received.Length);
-            _buffer.Position = _continue;
-
-            object obj = default(object);
-
-            try
+            _fiber.Enqueue(() =>
             {
-                long previous = _buffer.Position;
-
-                while (Serializer.NonGeneric.TryDeserializeWithLengthPrefix(_buffer, PrefixStyle.Base128, ProtoUtilities.GetPacketType, out obj))
+                if (Location.Zone != Area.Undefined)
                 {
-                    _continue = _buffer.Position;
-
-                    Packet packet = (Packet)obj;
-
-                    previous = _continue;
+                    CurrentZone.PlayerPart(this);
                 }
-            }
-            catch(EndOfStreamException)
-            {
-                // partial packet. waiting for the rest to arrive.
-            }
-
-            if (_continue == _buffer.Length)
-            {
-                _continue = 0;
-                _buffer.SetLength(0);
-            }
+            });
         }
     }
 }

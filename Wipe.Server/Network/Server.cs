@@ -31,10 +31,5 @@ namespace Wipe.MMO.Network
             Connection(e.Connection);
         }
 
-        private static void Connection_ReceivedMessage(object sender, EventArgs e)
-        {
-
-
-        }
     }
 }
