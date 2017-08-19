@@ -5,6 +5,8 @@ using System.Text;
 using System.Threading.Tasks;
 using SocketMessaging;
 using System.IO;
+using System.Net;
+using System.Runtime.Remoting.Messaging;
 using ProtoBuf;
 using Wipe.Packets;
 using Wipe.MMO.Utilities;
@@ -15,8 +17,15 @@ namespace Wipe.MMO.Entities
     public partial class Player
     {
         private Connection _connection;
-        private MemoryStream _buffer;
+        private MemoryStream _buffer = new MemoryStream();
         private long _bufferContinuePosition;
+        private readonly ObjectRouter routeHandler = new ObjectRouter();
+
+
+        private void InitializeRoutes()
+        {
+            routeHandler.SetRoute<CPKT_AuthRequest>(Handle_AuthRequest);
+        }
 
         /// <summary>
         /// Handles recieving a packet from the player.
@@ -33,15 +42,15 @@ namespace Wipe.MMO.Entities
             // Set the position of the buffer back to where we were upto previously.
             _buffer.Position = _bufferContinuePosition;
 
-            object obj = default(object);
-
             try
             {
-                while (Serializer.NonGeneric.TryDeserializeWithLengthPrefix(_buffer, PrefixStyle.Base128, ProtoUtilities.GetPacketType, out obj))
+                while (Serializer.NonGeneric.TryDeserializeWithLengthPrefix(_buffer, PrefixStyle.Base128, ProtoUtilities.GetPacketType, out object obj))
                 {
                     _bufferContinuePosition = _buffer.Position;
 
                     Packet packet = (Packet)obj;
+
+                    _fiber.Enqueue(() => HandlePacket(packet));
 
                 }
             }
@@ -54,6 +63,20 @@ namespace Wipe.MMO.Entities
             {
                 _bufferContinuePosition = 0;
                 _buffer.SetLength(0);
+            }
+        }
+
+        private void HandlePacket(Packet packet)
+        {
+            bool handled = routeHandler.Route(packet);
+
+            if (!handled)
+            {
+                
+            }
+            else
+            {
+
             }
         }
 
@@ -78,6 +101,48 @@ namespace Wipe.MMO.Entities
                     }
                 }
             }
+        }
+
+        public void Respond(Packet packet, Packet response)
+        {
+            response.Id = packet.Id;
+            Send(response);
+        }
+
+        private void Handle_AuthRequest(CPKT_AuthRequest authRequest)
+        {
+            IPEndPoint ipEndPoint = _connection.Socket.RemoteEndPoint as IPEndPoint;
+
+            _log.Debug($"CPKT_AuthRequest from {ipEndPoint}");
+
+            SPKT_AuthRequest response = new SPKT_AuthRequest() { EntityId = _entityId};
+
+            // temp account management
+            if (authRequest.Hash == "zaqwsxcdsxcderfvbgtyhnp")
+            {
+                _authenticated = true;
+                _accountId = 9;
+                _currentZone = new Zone();
+                _location.Heading = 9;
+                _location.X = 33;
+                _location.Y = 12;
+                _location.Zone = Area.UngurForest;
+                _name = "Dazusu";
+
+                _log.Debug($"{_name} logged in");
+
+                response.Result = AuthResult.OK;
+                response.X = _location.X;
+                response.Y = _location.Y;
+                response.Name = _name;
+                response.ZoneID = (int) _location.Zone;
+            }
+            else
+            {
+                response.Result = AuthResult.BadLogin;
+            }
+
+            Respond(authRequest, response);
         }
     }
 }

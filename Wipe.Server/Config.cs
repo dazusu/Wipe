@@ -8,8 +8,6 @@ namespace Wipe.MMO
 {
     public static class Config
     {
-        public const int UPDATE_ZONE_ENTITY_MS = 250;
-        public const int UPDATE_PLAYER_ENTITY_MS = 150;
-
+        public const int UPDATE_PLAYER_ENTITY_MS = 250;
     }
 }

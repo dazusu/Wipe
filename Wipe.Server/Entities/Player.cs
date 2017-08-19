@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using SocketMessaging;
 using System.IO;
+using NLog;
 using ProtoBuf;
 using Wipe.Packets;
 using Wipe.MMO.Utilities;
@@ -14,19 +15,25 @@ namespace Wipe.MMO.Entities
 {
     public partial class Player : IEntity
     {
+        private Logger _log = LogManager.GetCurrentClassLogger();
+        private Fiber _fiber = new Fiber();
+
         #region Fields
         private bool _authenticated = false;
-        private Fiber _fiber = new Fiber();
-        private int _entityId;
-        private EntityLocation _location;
-        private Zone _currentZone;
 
+        private int _entityId;
+        private int _accountId;
+        private int _connectionId;
+
+        private EntityLocation _location = new EntityLocation();
+        private Zone _currentZone;
         private EntityUpdate _entityUpdate = new EntityUpdate();
         private ZoneUpdate _zoneUpdate = new ZoneUpdate();
         #endregion
 
         #region Player Stats
-        private int _velocity = 500;
+        private int _velocity = 0;
+        private int _speed = 0;
         private string _name = "";
         #endregion
 
@@ -45,23 +52,16 @@ namespace Wipe.MMO.Entities
         /// <param name="connection"></param>
         public Player(Connection connection)
         {
-            _authenticated = true;
-            _name = "Dazusu";
-            _location = new EntityLocation()
-            {
-                X = 10,
-                Y = 11,
-                Heading = 9,
-                Zone = Area.UngurForest
-            };
+            InitializeRoutes();
 
-            _currentZone = new Zone();
-
-            _buffer = new MemoryStream();
-            // Assign the player's connection reference.
+            // Assign connection information.
             _connection = connection;
-            // Set the connection mode to raw.
+            _connectionId = connection.Id;
+            _entityId = World.GetNextEntityId();
+
+            // Setup the connection to use raw messaging.
             _connection.SetMode(MessageMode.Raw);
+
             // Hook the ReceivedRaw event.
             _connection.ReceivedRaw += _connection_ReceivedRaw;
 
